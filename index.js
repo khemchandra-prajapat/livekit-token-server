@@ -2,6 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const { AccessToken } = require('livekit-server-sdk');
 const admin = require('firebase-admin');
+const { execSync, spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const { Readable } = require('stream');
 
 const app = express();
 app.use(cors());
@@ -28,6 +32,109 @@ const checkAuth = (req, res) => {
   }
   return true;
 };
+
+const VOICE = 'en-US-AriaNeural';
+
+app.post('/tts', async (req, res) => {
+  try {
+    if (!checkAuth(req, res)) return;
+
+    const { text, voice } = req.body;
+
+    if (!text || text.trim() === '') {
+      return res.status(400).json({
+        error: 'text is required'
+      });
+    }
+
+    const selectedVoice = voice || VOICE;
+
+    // Clean text
+    const cleanText = text
+      .replace(/\*+/g, '')
+      .replace(/#+/g, '')
+      .replace(/\n+/g, ' ')
+      .trim();
+
+    // edge-tts command
+    const outputFile = `/tmp/tts_${Date.now()}.mp3`;
+
+    await new Promise((resolve, reject) => {
+      const proc = spawn('edge-tts', [
+        '--voice', selectedVoice,
+        '--text', cleanText,
+        '--write-media', outputFile,
+        '--rate', '-5%',   // thoda slow — calm feel
+        '--pitch', '-2Hz', // slightly deeper — natural
+        '--volume', '+0%',
+      ]);
+
+      proc.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`edge-tts failed: ${code}`));
+      });
+
+      proc.on('error', reject);
+    });
+
+    // File read karke bhejo
+    const audioData = fs.readFileSync(outputFile);
+    fs.unlinkSync(outputFile); // cleanup
+
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': audioData.length,
+      'Cache-Control': 'no-cache',
+    });
+
+    res.send(audioData);
+  } catch (e) {
+    console.error('TTS error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Available voices list ────────────────────────────
+app.get('/tts/voices', async (req, res) => {
+  try {
+    // Best natural female voices
+    const voices = [
+      {
+        id: 'en-US-AriaNeural',
+        name: 'Aria',
+        style: 'Calm & Natural (Recommended)',
+        gender: 'Female',
+      },
+      {
+        id: 'en-US-JennyNeural',
+        name: 'Jenny',
+        style: 'Friendly & Clear',
+        gender: 'Female',
+      },
+      {
+        id: 'en-US-MichelleNeural',
+        name: 'Michelle',
+        style: 'Warm & Professional',
+        gender: 'Female',
+      },
+      {
+        id: 'en-GB-SoniaNeural',
+        name: 'Sonia',
+        style: 'British & Elegant',
+        gender: 'Female',
+      },
+      {
+        id: 'en-IN-NeerjaNeural',
+        name: 'Neerja',
+        style: 'Indian English',
+        gender: 'Female',
+      },
+    ];
+    res.json(voices);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // Gemini call helper
 const callGemini = async (systemPrompt, contents) => {

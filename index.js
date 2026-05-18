@@ -42,9 +42,7 @@ app.post('/tts', async (req, res) => {
     const { text, voice } = req.body;
 
     if (!text || text.trim() === '') {
-      return res.status(400).json({
-        error: 'text is required'
-      });
+      return res.status(400).json({ error: 'text is required' });
     }
 
     const cleanText = text
@@ -53,25 +51,33 @@ app.post('/tts', async (req, res) => {
       .replace(/\n+/g, ' ')
       .trim();
 
-    // ✅ Best natural female voice
     const selectedVoice = voice || 'en-US-AriaNeural';
 
-    const tts = new EdgeTTS({
+    // ✅ node-edge-tts correct syntax
+    const tts = new EdgeTTS();
+
+    // Temp file mein save karo
+    const tmpFile = `/tmp/tts_${Date.now()}.mp3`;
+
+    await tts.ttsPromise(cleanText, tmpFile, {
       voice: selectedVoice,
-      rate: '-5%',    // thoda slow — calm feel
-      pitch: '-2Hz',  // slightly deeper — natural
-      volume: '+0%',
+      rate: '-5%',
+      pitch: '-2Hz',
     });
 
-    const { audioStream } = await tts.synthesize(cleanText);
+    // File read karke bhejo
+    const audioBuffer = fs.readFileSync(tmpFile);
+
+    // Cleanup
+    fs.unlinkSync(tmpFile);
 
     res.set({
       'Content-Type': 'audio/mpeg',
+      'Content-Length': audioBuffer.length,
       'Cache-Control': 'no-cache',
     });
 
-    audioStream.pipe(res);
-
+    res.send(audioBuffer);
   } catch (e) {
     console.error('TTS error:', e);
     res.status(500).json({ error: e.message });

@@ -33,7 +33,8 @@ const checkAuth = (req, res) => {
   return true;
 };
 
-const EdgeTTS = require('node-edge-tts');
+// Is line ko change karein:
+const { EdgeTTS } = require('node-edge-tts');
 
 app.post('/tts', async (req, res) => {
   try {
@@ -51,13 +52,14 @@ app.post('/tts', async (req, res) => {
       .replace(/\n+/g, ' ')
       .trim();
 
-    const selectedVoice = voice || 'en-US-AriaNeural';
+    // English ke liye Emma select hogi jo bahut calm aur beautiful female voice hai
+    const selectedVoice = voice || 'en-US-EmmaNeural';
 
-    // ✅ node-edge-tts correct syntax
+    // ✅ Ab ye error nahi dega kyunki top par destructuring use ki hai
     const tts = new EdgeTTS();
 
     // Temp file mein save karo
-    const tmpFile = `/tmp/tts_${Date.now()}.mp3`;
+    const tmpFile = path.join('/tmp', `tts_${Date.now()}.mp3`);
 
     await tts.ttsPromise(cleanText, tmpFile, {
       voice: selectedVoice,

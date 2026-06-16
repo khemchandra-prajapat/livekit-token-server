@@ -279,31 +279,83 @@ app.post('/token', async (req, res) => {
 });
 
 // Send notification
+//app.post('/notify', async (req, res) => {
+//  try {
+//    if (!checkAuth(req, res)) return;
+//
+//    const { fcmToken, title, body, data } = req.body;
+//
+//    if (!fcmToken) {
+//      return res.status(400).json({
+//        error: 'fcmToken is required'
+//      });
+//    }
+//
+//    await admin.messaging().send({
+//      token: fcmToken,
+//      notification: { title: title || 'SpeakUp', body: body || '' },
+//      data: data || {},
+//      android: {
+//        priority: 'high',
+//        notification: {
+//          sound: 'default',
+//          channelId: 'speakup_channel',
+//        },
+//      },
+//      apns: {
+//        payload: { aps: { sound: 'default' } },
+//      },
+//    });
+//
+//    res.json({ success: true });
+//  } catch (e) {
+//    res.status(500).json({ error: e.message });
+//  }
+//});
+
 app.post('/notify', async (req, res) => {
   try {
     if (!checkAuth(req, res)) return;
 
-    const { fcmToken, title, body, data } = req.body;
+    const { fcmToken, title, body, data, notificationType } = req.body;
 
     if (!fcmToken) {
-      return res.status(400).json({
-        error: 'fcmToken is required'
-      });
+      return res.status(400).json({ error: 'fcmToken is required' });
     }
+
+    const isCall = notificationType === 'call_invite';
 
     await admin.messaging().send({
       token: fcmToken,
-      notification: { title: title || 'SpeakUp', body: body || '' },
+      notification: {
+        title: title || 'SpeakUp',
+        body: body || '',
+      },
       data: data || {},
       android: {
         priority: 'high',
         notification: {
-          sound: 'default',
-          channelId: 'speakup_channel',
+          // ✅ Call ke liye call_channel — ringtone bajegi
+          channelId: isCall ? 'call_channel' : 'speakup_channel',
+          sound: isCall ? 'ringtone' : 'default',
+          priority: isCall ? 'max' : 'high',
+          visibility: 'public',
+          // ✅ Lock screen pe bhi full screen dikhe
+          ...(isCall && { defaultVibrateTimings: true }),
         },
       },
       apns: {
-        payload: { aps: { sound: 'default' } },
+        payload: {
+          aps: {
+            sound: isCall ? 'ringtone.mp3' : 'default',
+            badge: 1,
+            // ✅ iOS call notification
+            category: isCall ? 'CALL_INVITE' : undefined,
+          },
+        },
+        headers: {
+          'apns-priority': isCall ? '10' : '5',
+        },
       },
     });
 
